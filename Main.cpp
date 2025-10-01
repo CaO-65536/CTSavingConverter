@@ -1,4 +1,4 @@
-#include <iostream>
+ï»¿#include <iostream>
 #include <string>
 #include <sstream>
 #include <iomanip>
@@ -8,7 +8,6 @@
 
 #define IDENTIFYBYTES "CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC CC"
 
-// Ê¹ÓÃ³£Á¿´úÌæÄ§ÊõÊý×Ö£¬Ìá¸ß´úÂë¿É¶ÁÐÔ
 const std::string SCRIPT_TAG_START = "<AssemblerScript>";
 const std::string SCRIPT_TAG_END = "</AssemblerScript>";
 const std::string ALLOC_FUNC = "alloc(";
@@ -16,10 +15,9 @@ const std::string DEALLOC_FUNC = "dealloc(";
 const std::string FAKE_DISABLE_TAG = "'[DISABLE]'";
 const std::string DISABLE_TAG = "[DISABLE]";
 
-// ÄÚ´æ¶ÔÆë³£Á¿
 const int MEMORY_ALIGNMENT = 16;
 
-std::string StartAddress = "794000";
+std::string StartAddress;// = "794000";
 
 std::string DecIntToHexString(int theDec) {
     int a;
@@ -105,7 +103,7 @@ bool SetClipboardText(const std::string& text) {
     return true;
 }
 
-std::string NewCheatEntry(const int theID, const std::string& name, const std::string& context) {
+/*std::string NewCheatEntry(const int theID, const std::string& name, const std::string& context) {
     std::string head =  "<CheatEntry>\n"
                         "<ID>" + std::to_string(theID) + "</ID>\n"
                         "<Description>\"" + name + "\"</Description>\n"
@@ -117,19 +115,19 @@ std::string NewCheatEntry(const int theID, const std::string& name, const std::s
                         "</AssemblerScript>\n"
                         "</CheatEntry>";
 	return head + context + tail;
-}
+}*/
 
 std::string ProcessScript(const std::string& input) {
     std::string result = input;
     std::string ScriptName;
     std::string replacement;
-	std::string AddtionalScripts;
-    int n = 0;
-    int TotalPageLength = 0;
-    size_t startPos = 0;
-    size_t endPos = 0;
+	//std::string AddtionalScripts;
+    int n = 1;
+    //int TotalPageLength = 0;
+    size_t startPos = std::string::npos;
+    size_t endPos = std::string::npos;
     int OriginalScriptSize = 0;
-    int previousPageLength = 0;
+    std::string previousPageLength = "A0";
 
     startPos = result.find(SCRIPT_TAG_START);
     while (startPos != std::string::npos) {
@@ -139,7 +137,6 @@ std::string ProcessScript(const std::string& input) {
         }
 
         std::string scriptContent = result.substr(startPos + SCRIPT_TAG_START.length(), endPos - startPos - SCRIPT_TAG_START.length());
-        bool hasalloc = false;
         size_t allocPos = scriptContent.find(ALLOC_FUNC);
         
 
@@ -153,17 +150,12 @@ std::string ProcessScript(const std::string& input) {
             if ((deallocPos = scriptContent.find(DEALLOC_FUNC + ScriptName + ")")) != std::string::npos) {
                 scriptContent.erase(deallocPos, ScriptName.length() + DEALLOC_FUNC.length() + 1);
             }
-            replacement = "define(" + ScriptName + ",Page_" + std::to_string(n) + ")";
-            scriptContent.replace(allocPos, allocendPos - allocPos + 1, replacement);
-            hasalloc = true;
-            //allocPos = scriptContent.find(ALLOC_FUNC, allocendPos);
-        }
-
-        int ScriptLength = endPos - startPos - SCRIPT_TAG_START.length();
-        result.replace(startPos + SCRIPT_TAG_START.length(), ScriptLength, scriptContent);
-
-        if (hasalloc) {
+            int PageLength;
+            int alignedPageLength;
             size_t disablePos;
+            size_t ScriptNameStartPos;
+            size_t ScriptNameStartPos_N;
+            std::string hexLength;
             size_t fakedisablePos = scriptContent.find(FAKE_DISABLE_TAG);
             if (fakedisablePos == std::string::npos) {
                 disablePos = scriptContent.find(DISABLE_TAG);
@@ -172,127 +164,91 @@ std::string ProcessScript(const std::string& input) {
                 disablePos = scriptContent.find(DISABLE_TAG, fakedisablePos + FAKE_DISABLE_TAG.length());
             }
             if (disablePos != std::string::npos) {
-                size_t ScriptNameStartPos = scriptContent.find(ScriptName + ":");
+                ScriptNameStartPos = scriptContent.find(ScriptName + ":");
                 if (ScriptNameStartPos != std::string::npos) {
-                    ScriptNameStartPos += ScriptName.length() + 1;
-                    int PageLength = ((int(disablePos - ScriptNameStartPos) < OriginalScriptSize) ? int(disablePos - ScriptNameStartPos) : OriginalScriptSize);
-                    int alignedPageLength = ((PageLength % MEMORY_ALIGNMENT) == 0) ? PageLength : PageLength + (MEMORY_ALIGNMENT - (PageLength % MEMORY_ALIGNMENT));
-
-                    if (n == 0) {
-                        /*PageList += "define(Page_" + std::to_string(n) + "," + StartAddress + ")\n"
-                                  + "registersymbol(Page_" + std::to_string(n) + ")\n";*/
-                        AddtionalScripts += NewCheatEntry(  100000 + n, "ÄÚ´æÒ³¶¨Òå½Å±¾_" + std::to_string(n), 
-                                                            "define(Page_" + std::to_string(n) + "," + StartAddress + ")\n" + 
-                                                            "registersymbol(Page_" + std::to_string(n) + ")\n" +
-                                                            "Page_" + std::to_string(n) + ":\n" +
-                                                            "align " + std::to_string(RoundUpTo1024_bit(TotalPageLength)) + ",CC\n");
-                    }
-                    else {
-                        std::string hexLength = DecIntToHexString(previousPageLength);
-                        //PageList += "define(Page_" + std::to_string(n) + ",Page_" + std::to_string(n - 1) + "+" + hexLength + ")\nregistersymbol(Page_" + std::to_string(n) + ")\n";
-                       /* PageList += "aobscanregion(Page_" + std::to_string(n) +
-                                                ", Page_" + std::to_string(n - 1) +
-                                                ", Page_" + std::to_string(n - 1) + "+" + hexLength +
-                                                ", " + IDENTIFYBYTES + ")\nregistersymbol(Page_" + std::to_string(n) + ")\n";*/
-                        //aobscanregion(thisPage, LastPage, LastPage+PredictSize, CC x 20)
-                        AddtionalScripts += NewCheatEntry(  100000 + n, "ÄÚ´æÒ³¶¨Òå½Å±¾_" + std::to_string(n), 
-                                                            "aobscanregion(Page_" + std::to_string(n) + 
-                                                            ", Page_" + std::to_string(n - 1) + 
-                                                            ", Page_" + std::to_string(n - 1) + "+" + hexLength + 
-						                                	", " + IDENTIFYBYTES + ")\nregistersymbol(Page_" + std::to_string(n) + ")\n");
-                    }
-
-                    previousPageLength = alignedPageLength;
-                    TotalPageLength += alignedPageLength;
-                    n++;
+                    ScriptNameStartPos_N = ScriptNameStartPos + ScriptName.length() + 1;
+                    PageLength = ((int(disablePos - ScriptNameStartPos_N) < OriginalScriptSize) ? int(disablePos - ScriptNameStartPos_N) : OriginalScriptSize);
+                    alignedPageLength = ((PageLength % MEMORY_ALIGNMENT) == 0) ? PageLength : PageLength + (MEMORY_ALIGNMENT - (PageLength % MEMORY_ALIGNMENT));
+                    hexLength = DecIntToHexString(alignedPageLength);
                 }
-            }
+                else
+                {
+                    hexLength = "0";
+                }
+            std::string setPageAddress = "Page_" + std::to_string(n) + ":\n" +
+                    "align 10,CC\n";// +
+                    //"Page_" + std::to_string(n) + ":\n";
+            scriptContent.insert(ScriptNameStartPos, setPageAddress);
+            replacement = "aobscanregion(Page_" + std::to_string(n) + ", Page_" + std::to_string(n - 1) + ", Page_" + std::to_string(n - 1) + "+" + "2000" + ", " + IDENTIFYBYTES + ")\n";//previousPageLength + ", " + IDENTIFYBYTES + ")\n";
+            //aobscanregion(thisPage, LastPage, LastPage+PredictSize, CC x 20)
+            //replacement += "define(Page_" + std::to_string(n) + ", " + ScriptName + ")\n";//replacement += "label(Page_" + std::to_string(n) + ")\n";
+            replacement += "registersymbol(Page_" + std::to_string(n) + ")\n";
+            replacement += "label(" + ScriptName + ")";
+            //if (n == 1) {
+			//	replacement.insert(0, "define(Page_" + std::to_string(n - 1) + ", " + StartAddress + ")\n");
+            //}
+            scriptContent.replace(allocPos, allocendPos - allocPos + 1, replacement);
+
+            previousPageLength = hexLength;
+			//TotalPageLength += alignedPageLength;
+        }
+
+        int ScriptLength = endPos - startPos - SCRIPT_TAG_START.length();
+        result.replace(startPos + SCRIPT_TAG_START.length(), ScriptLength, scriptContent);
+        n++;
         }
 
         startPos = result.find(SCRIPT_TAG_START, endPos);
-    }
-
-    // ÔÚPageListµÄ¿ªÍ·²åÈë×ÜÄÚ´æ´óÐ¡×¢ÊÍ
-    //PageList += "Page_0:\nalign " + std::to_string(RoundUpTo1024_bit(TotalPageLength)) + ",CC\n";
-    //PageList.insert(0, "//×ÜÄÚ´æ´óÐ¡Ó¦´óÓÚ£º" + std::to_string(TotalPageLength) + "×Ö½Ú\n");
-    // ²éÕÒ </AssemblerScript> µÄ½áÊøÎ»ÖÃ
-    std::size_t scriptEndPos = result.rfind("</AssemblerScript>");
-
-    // Èç¹ûÕÒµ½ÁË </AssemblerScript>
-    if (scriptEndPos != std::string::npos)
-    {
-        // ¼ÆËã²åÈëµÄÆðÊ¼Î»ÖÃ£¬¼´ </AssemblerScript> Ö®ºó
-        std::size_t insertStartPos = scriptEndPos + std::string("</AssemblerScript>").length();
-
-        // ÕÒµ½ </CheatEntry> µÄÎ»ÖÃ£¬´Ó scriptEndPos Ö®ºó¿ªÊ¼²éÕÒ
-        std::string EntryEnd = "</CheatEntry>";
-        std::size_t cheatEntryEndPos = result.find(EntryEnd, insertStartPos);
-
-        // Èç¹ûÕÒµ½ÁË </CheatEntry>
-        if (cheatEntryEndPos != std::string::npos)
-        {
-            // ²åÈë AddtionalScripts
-			cheatEntryEndPos += EntryEnd.length();
-            result.insert(cheatEntryEndPos, AddtionalScripts);
-        }
     }
     return result;
 }
 
 int main()
 {
-    // »¶Ó­²¢ÌáÊ¾ÓÃ»§²Ù×÷
     std::cout << "------------------------------------------" << std::endl;
-    std::cout << "       CT½Å±¾ÄÚ´æµØÖ·×Ô¶¯´¦Àí¹¤¾ß         " << std::endl;
+    std::cout << "       CTè„šæœ¬å†…å­˜åœ°å€è‡ªåŠ¨å¤„ç†å·¥å…·         " << std::endl;
     std::cout << "------------------------------------------" << std::endl;
-    std::cout << "Çë½«´ý´¦ÀíµÄCT½Å±¾£¨°üº¬<AssemblerScript>±êÇ©£©" << std::endl;
-    std::cout << "¸´ÖÆµ½¼ôÌù°å£¬È»ºó°´ÈÎÒâ¼ü¼ÌÐø..." << std::endl;
-    std::cout << "×¢Òâ£ºÈç¹û¼ôÌù°åÄÚ²»ÊÇCT½Å±¾£¬³ÌÐò½«ÎÞ·¨Õý³£¹¤×÷¡£" << std::endl;
+    std::cout << "è¯·å°†å¾…å¤„ç†çš„CTè„šæœ¬ï¼ˆåŒ…å«<AssemblerScript>æ ‡ç­¾ï¼‰" << std::endl;
+    std::cout << "å¤åˆ¶åˆ°å‰ªè´´æ¿ï¼Œç„¶åŽæŒ‰ä»»æ„é”®ç»§ç»­..." << std::endl;
+    std::cout << "æ³¨æ„ï¼šå¦‚æžœå‰ªè´´æ¿å†…ä¸æ˜¯CTè„šæœ¬ï¼Œç¨‹åºå°†æ— æ³•æ­£å¸¸å·¥ä½œã€‚" << std::endl;
     std::cout << "------------------------------------------" << std::endl;
     system("pause");
 
-    // ´Ó¼ôÌù°å¶ÁÈ¡Êý¾Ý
     std::string input = ReadFromClipboard();
 
-    // ¼ì²é¼ôÌù°åÄÚÈÝÊÇ·ñÓÐÐ§
     if (input.empty()) {
-        std::cerr << "´íÎó£º¼ôÌù°åÖÐÃ»ÓÐÎÄ±¾Êý¾Ý£¬ÇëÈ·±£ÒÑ¸´ÖÆ½Å±¾¡£" << std::endl;
+        std::cerr << "é”™è¯¯ï¼šå‰ªè´´æ¿ä¸­æ²¡æœ‰æ–‡æœ¬æ•°æ®ï¼Œè¯·ç¡®ä¿å·²å¤åˆ¶è„šæœ¬ã€‚" << std::endl;
         system("pause");
         return 1;
     }
     if (input.find(SCRIPT_TAG_START) == std::string::npos) {
-        std::cerr << "´íÎó£º¼ôÌù°åÄÚÈÝ²»ÊÇÓÐÐ§µÄCT½Å±¾£¬Î´ÕÒµ½" << SCRIPT_TAG_START << "±êÇ©¡£" << std::endl;
+        std::cerr << "é”™è¯¯ï¼šå‰ªè´´æ¿å†…å®¹ä¸æ˜¯æœ‰æ•ˆçš„CTè„šæœ¬ï¼Œæœªæ‰¾åˆ°" << SCRIPT_TAG_START << "æ ‡ç­¾ã€‚" << std::endl;
         system("pause");
         return 1;
     }
 
-    std::cout << "ÕýÔÚ´¦Àí½Å±¾£¬ÇëÉÔºò..." << std::endl;
+	//std::cout << "è¯·è¾“å…¥è„šæœ¬çš„èµ·å§‹åœ°å€ï¼ˆåå…­è¿›åˆ¶ï¼‰ï¼Œä¾‹å¦‚794000ï¼š" << std::endl;
+	//std::cin >> StartAddress;
+
+    std::cout << "æ­£åœ¨å¤„ç†è„šæœ¬ï¼Œè¯·ç¨å€™..." << std::endl;
 
     std::string output = ProcessScript(input);
 
-    // ½«´¦ÀíºóµÄ½Å±¾Ð´»Ø¼ôÌù°å
     bool Iscompelete = SetClipboardText(output);
 
-    // ´òÓ¡½á¹û²¢Ìá¹©ÇåÎúµÄ·´À¡
     std::cout << "------------------------------------------" << std::endl;
     if (Iscompelete) {
-        std::cout << "´¦ÀíÍê³É£¡" << std::endl;
-        std::cout << "ÐÞ¸ÄºóµÄÍêÕû½Å±¾ÒÑ¸´ÖÆµ½¼ôÌù°å£¬Äú¿ÉÒÔÖ±½ÓÕ³ÌùÊ¹ÓÃ¡£" << std::endl;
+        std::cout << "å¤„ç†å®Œæˆï¼" << std::endl;
+        std::cout << "ä¿®æ”¹åŽçš„å®Œæ•´è„šæœ¬å·²å¤åˆ¶åˆ°å‰ªè´´æ¿ï¼Œæ‚¨å¯ä»¥ç›´æŽ¥ç²˜è´´ä½¿ç”¨ã€‚" << std::endl;
     }
     else {
-        std::cerr << "´¦ÀíÍê³É£¬µ«ÎÞ·¨½«½á¹û¸´ÖÆµ½¼ôÌù°å¡£" << std::endl;
+        std::cerr << "å¤„ç†å®Œæˆï¼Œä½†æ— æ³•å°†ç»“æžœå¤åˆ¶åˆ°å‰ªè´´æ¿ã€‚" << std::endl;
     }
-    /*std::cout << std::endl;
-    std::cout << PageList << std::endl;
-    std::cout << "ÒÔÉÏÊÇÉú³ÉµÄµØÖ·¶¨Òå£¬°´ÈÎÒâ¼ü¸´ÖÆµ½¼ôÌù°å£º" << std::endl;
-    std::cout << "------------------------------------------" << std::endl;
-    system("pause");
-    Iscompelete = SetClipboardText(PageList);*/
     if (Iscompelete) {
-        std::cout << "´¦ÀíÍê³É£¡" << std::endl;
+        std::cout << "å¤„ç†å®Œæˆï¼" << std::endl;
     }
     else {
-        std::cerr << "´¦ÀíÍê³É£¬µ«ÎÞ·¨½«½á¹û¸´ÖÆµ½¼ôÌù°å¡£" << std::endl;
+        std::cerr << "å¤„ç†å®Œæˆï¼Œä½†æ— æ³•å°†ç»“æžœå¤åˆ¶åˆ°å‰ªè´´æ¿ã€‚" << std::endl;
     }
     return 0;
 }
